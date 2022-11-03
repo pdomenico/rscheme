@@ -1,10 +1,11 @@
 use crate::Value;
 use std::collections::HashMap;
+use crate::primitive_procedures;
 
 pub type Env = Vec<HashMap<String, Value>>;
 
 pub fn default_env() -> Env {
-    vec![HashMap::new()]
+    return vec![HashMap::new()];
 }
 
 pub fn add_binding(key: String, value: Value, env: &mut Env) -> &mut Env {

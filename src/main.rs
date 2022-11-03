@@ -2,21 +2,23 @@ use colored::Colorize;
 use std::fmt;
 use std::io;
 use std::io::Write;
+use std::collections::HashMap;
 
 mod primitive_procedures;
 use primitive_procedures as pp;
 mod environment;
 
 use crate::environment::Env;
-use primitive_procedures::NumberType;
 
 #[derive(Clone)]
 pub enum Value {
     Text(String),
-    Number(NumberType),
+    Integer(i32),
+    Float(f64),
     Boolean(bool),
     Pair(Box<Value>, Box<Value>),
     Procedure(Vec<String>, String),
+    PrimitiveProcedure,
     Error(String),
     Nothing,
 }
@@ -26,17 +28,18 @@ static ONLY_NUMBERS_PROCS: [&str; 9] = ["+", "-", "*", "/", "=", ">", "<", ">=",
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Text(s) => write!(f, "{}\n", s),
-            Value::Number(NumberType::Integer(v)) => write!(f, "{}\n", v),
-            Value::Number(NumberType::Float(v)) => write!(f, "{}\n", v),
-            Value::Error(m) => write!(f, "{}", format!("ERROR: {}\n", m).red().bold()),
-            Value::Boolean(v) => write!(f, "{}\n", v),
+            Value::Text(s) => write!(f, "{}", s),
+            Value::Integer(v) => write!(f, "{}", v),
+            Value::Float(v) => write!(f, "{}", v),
+            Value::Error(m) => write!(f, "{}", format!("ERROR: {}", m).red().bold()),
+            Value::Boolean(v) => write!(f, "{}", v),
             Value::Procedure(parameters, body) => write!(
                 f,
                 "Procedure with {} arguments and body: {}",
                 parameters.len(),
                 body
             ),
+            Value::Pair(car, cdr) => write!(f, "({} . {})", car, cdr),
             Value::Nothing => Ok(()),
             _ => write!(f, "Printing this type not implemented yet!\n"),
         }
@@ -56,7 +59,7 @@ fn main() {
             break;
         }
 
-        print!("{}", eval(&line, &mut env));
+        print!("{}\n", eval(&line, &mut env));
     }
 }
 
@@ -66,7 +69,7 @@ fn eval(s: &str, env: &mut Env) -> Value {
 
     // See if it's self evaluating
     if let Ok(v) = s.parse::<i32>() {
-        return Value::Number(NumberType::Integer(v));
+        return Value::Integer(v);
     }
 
     if s.to_string().starts_with('\'') {
@@ -81,6 +84,10 @@ fn eval(s: &str, env: &mut Env) -> Value {
                 exp = vec;
             }
             None => return Value::Error(String::from("Parenthesis mismatch")),
+        }
+
+        if exp[0] == "nil" {
+            return Value::Nothing;
         }
 
         // Check for special expression (define, let, if, cond, lambda...)
@@ -153,7 +160,7 @@ fn eval(s: &str, env: &mut Env) -> Value {
 
 fn get_exp_inside_paren(s: &str) -> Option<Vec<String>> {
     if s == "()" {
-        return None;
+        return Some(vec![String::from("nil")]);
     }
     // println!("Exp is {}", s);
     let mut subexps: Vec<String> = Vec::new();
@@ -238,43 +245,66 @@ fn get_exp_inside_paren(s: &str) -> Option<Vec<String>> {
 //fn self_evaluating(s: &str) -> Option<T> {}
 
 fn apply(proc: &str, args: &Vec<Value>) -> Value {
-    // check for primitive procedures
-    if ONLY_NUMBERS_PROCS.contains(&proc) {
-        let mut n_args: Vec<&NumberType> = Vec::new();
-        for arg in args {
-            match arg {
-                Value::Number(n) => n_args.push(n),
-                _ => return Value::Error("Only numbers allowed!".to_string()),
+    // Check for primitive procedures
+    match proc {
+        "p" | "print" => {
+            let mut to_print = String::new();
+            for arg in args {
+                to_print.push_str(format!("{}", arg).as_str());
+            }
+            print!("{}", to_print);
+            return Value::Nothing;
+        }
+        "+" => {
+            match pp::sum(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for +")),
             }
         }
-        match proc {
-            "+" => return Value::Number(pp::sum(n_args)),
-            "-" => return Value::Number(pp::subtract(n_args)),
-            "*" => return Value::Number(pp::mul(n_args)),
-            "/" => {
-                if n_args.len() != 2 {
-                    return Value::Error(String::from("Wrong number of arguments for division!"));
-                } else {
-                    return Value::Number(pp::div(&n_args[0], &n_args[1]));
-                }
+        "-" => {
+            match pp::subtract(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for -")),
             }
-            "=" => {
-                if n_args.len() != 2 {
-                    return Value::Error(String::from("Wrong number of arguments!"));
-                }
-                return Value::Boolean(pp::equal(&n_args[0], &n_args[1]));
-            }
-            _ => return Value::Error(String::from("Procedure not yet implemented!")),
         }
+        "*" => {
+            match pp::mul(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for *")),
+            }
+        }
+        "/" => {
+            match pp::div(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for /")),
+            }
+        }
+        "eq?" | "=" => {
+            match pp::equal(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for eq?")),
+            }
+        }
+        "cons" => {
+            match pp::cons(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for cons")),
+            }
+        }
+        "car" => {
+            match pp::car(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for car")),
+            }
+        }
+        "cdr" => {
+            match pp::cdr(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for cdr")),
+            }
+        }
+        _ => (),
     }
 
-    if proc == "p" || proc == "print" {
-        let mut to_print = String::new();
-        for arg in args {
-            to_print.push_str(format!("{}", arg).as_str());
-        }
-        print!("{}", to_print);
-        return Value::Nothing;
-    }
-    return Value::Error(String::from("Not yet implemented"));
+    return Value::Error(String::from("Procedure not yet implemented"));
 }
