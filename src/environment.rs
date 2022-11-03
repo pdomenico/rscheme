@@ -1,11 +1,19 @@
+use crate::primitive_procedures;
 use crate::Value;
 use std::collections::HashMap;
-use crate::primitive_procedures;
 
 pub type Env = Vec<HashMap<String, Value>>;
 
 pub fn default_env() -> Env {
-    return vec![HashMap::new()];
+    let mut outer_env = HashMap::new();
+    for sym in [
+        "+", "-", "*", "/", "=", ">", "<", ">=", "<=", "cons", "car", "cdr",
+    ]
+    .iter()
+    {
+        outer_env.insert(sym.to_string(), Value::PrimitiveProcedure(sym.to_string()));
+    }
+    return vec![outer_env];
 }
 
 pub fn add_binding(key: String, value: Value, env: &mut Env) -> &mut Env {
@@ -16,9 +24,10 @@ pub fn add_binding(key: String, value: Value, env: &mut Env) -> &mut Env {
     return env;
 }
 
-pub fn extend_env(env: &mut Env) -> &mut Env {
-    env.push(HashMap::new());
-    env
+pub fn extend_env(env: &Env) -> Env {
+    let mut new_env = env.clone();
+    new_env.push(HashMap::new());
+    return new_env;
 }
 
 pub fn find_in_env<'a>(key: &'a str, env: &'a Env) -> Option<Value> {

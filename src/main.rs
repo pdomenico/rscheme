@@ -1,8 +1,8 @@
 use colored::Colorize;
+use std::collections::HashMap;
 use std::fmt;
 use std::io;
 use std::io::Write;
-use std::collections::HashMap;
 
 mod primitive_procedures;
 use primitive_procedures as pp;
@@ -18,7 +18,7 @@ pub enum Value {
     Boolean(bool),
     Pair(Box<Value>, Box<Value>),
     Procedure(Vec<String>, String),
-    PrimitiveProcedure,
+    PrimitiveProcedure(String),
     Error(String),
     Nothing,
 }
@@ -33,12 +33,7 @@ impl fmt::Display for Value {
             Value::Float(v) => write!(f, "{}", v),
             Value::Error(m) => write!(f, "{}", format!("ERROR: {}", m).red().bold()),
             Value::Boolean(v) => write!(f, "{}", v),
-            Value::Procedure(parameters, body) => write!(
-                f,
-                "Procedure with {} arguments and body: {}",
-                parameters.len(),
-                body
-            ),
+            Value::Procedure(parameters, body) => write!(f, ""),
             Value::Pair(car, cdr) => write!(f, "({} . {})", car, cdr),
             Value::Nothing => Ok(()),
             _ => write!(f, "Printing this type not implemented yet!\n"),
@@ -72,6 +67,10 @@ fn eval(s: &str, env: &mut Env) -> Value {
         return Value::Integer(v);
     }
 
+    if let Ok(v) = s.parse::<f64>() {
+        return Value::Float(v);
+    }
+
     if s.to_string().starts_with('\'') {
         return Value::Text(s[1..].to_string());
     }
@@ -94,8 +93,32 @@ fn eval(s: &str, env: &mut Env) -> Value {
         match exp[0].as_str() {
             "define" => {
                 let n_of_args = exp.len();
-                if n_of_args != 3 {
-                    return Value::Error(String::from("Wrong number of arguments for define!"));
+
+                // see if it's a procedure definition
+                if exp[1].to_string().starts_with('(') {
+                    if n_of_args != 3 {
+                        return Value::Error(String::from("Wrong number of arguments"));
+                    }
+
+                    // extract procedure name and parameters
+                    let mut new_expression = String::from("(define ");
+                    match get_exp_inside_paren(&exp[1]) {
+                        Some(second_part) => {
+                            new_expression.push_str(&second_part[0]);
+                            new_expression.push_str(" (lambda (");
+                            for i in 1..second_part.len() {
+                                new_expression.push_str(&second_part[i]);
+                                if i != second_part.len() - 1 {
+                                    new_expression.push_str(" ");
+                                }
+                            }
+                            new_expression.push_str(") ");
+                            new_expression.push_str(&exp[2]);
+                            new_expression.push_str("))");
+                            return eval(&new_expression, env);
+                        }
+                        None => return Value::Error(String::from("Wrong define statement")),
+                    }
                 }
 
                 let var_name = exp[1].as_str();
@@ -146,7 +169,7 @@ fn eval(s: &str, env: &mut Env) -> Value {
             .iter()
             .map(|subexp| eval(subexp.as_str(), env))
             .collect();
-        return apply(exp[0].as_str(), &args);
+        return apply(eval(exp[0].as_str(), env), &args, &env);
     }
 
     // See if it's a var bound in current env
@@ -242,68 +265,56 @@ fn get_exp_inside_paren(s: &str) -> Option<Vec<String>> {
     }
 }
 
-//fn self_evaluating(s: &str) -> Option<T> {}
-
-fn apply(proc: &str, args: &Vec<Value>) -> Value {
+fn apply(proc: Value, args: &Vec<Value>, env: &Env) -> Value {
     // Check for primitive procedures
-    match proc {
-        "p" | "print" => {
-            let mut to_print = String::new();
-            for arg in args {
-                to_print.push_str(format!("{}", arg).as_str());
-            }
-            print!("{}", to_print);
-            return Value::Nothing;
-        }
-        "+" => {
-            match pp::sum(args) {
+    if let Value::PrimitiveProcedure(ref name) = proc {
+        let name = name.as_str();
+        match name {
+            "+" => match pp::sum(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for +")),
-            }
-        }
-        "-" => {
-            match pp::subtract(args) {
+            },
+            "-" => match pp::subtract(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for -")),
-            }
-        }
-        "*" => {
-            match pp::mul(args) {
+            },
+            "*" => match pp::mul(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for *")),
-            }
-        }
-        "/" => {
-            match pp::div(args) {
+            },
+            "/" => match pp::div(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for /")),
-            }
-        }
-        "eq?" | "=" => {
-            match pp::equal(args) {
+            },
+            "eq?" | "=" => match pp::equal(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for eq?")),
-            }
-        }
-        "cons" => {
-            match pp::cons(args) {
+            },
+            "cons" => match pp::cons(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for cons")),
-            }
-        }
-        "car" => {
-            match pp::car(args) {
+            },
+            "car" => match pp::car(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for car")),
-            }
-        }
-        "cdr" => {
-            match pp::cdr(args) {
+            },
+            "cdr" => match pp::cdr(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for cdr")),
-            }
+            },
+            _ => (),
         }
-        _ => (),
+    }
+
+    // Check for user-defined procedures
+    if let Value::Procedure(parameters, body) = proc {
+        // extend the current environment with the new bindings
+        let mut new_env = environment::extend_env(env);
+        for (i, p) in parameters.iter().enumerate() {
+            environment::add_binding(p.to_string(), args[i].clone(), &mut new_env);
+        }
+        // return evalutation of the body of the procedure in the new environment
+        return eval(body.as_str(), &mut new_env);
     }
 
     return Value::Error(String::from("Procedure not yet implemented"));
