@@ -1,5 +1,4 @@
 use colored::Colorize;
-use std::collections::HashMap;
 use std::fmt;
 use std::io;
 use std::io::Write;
@@ -23,8 +22,6 @@ pub enum Value {
     Nothing,
 }
 
-static ONLY_NUMBERS_PROCS: [&str; 9] = ["+", "-", "*", "/", "=", ">", "<", ">=", "<="];
-
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -33,7 +30,7 @@ impl fmt::Display for Value {
             Value::Float(v) => write!(f, "{}", v),
             Value::Error(m) => write!(f, "{}", format!("ERROR: {}", m).red().bold()),
             Value::Boolean(v) => write!(f, "{}", v),
-            Value::Procedure(parameters, body) => write!(f, ""),
+            //Value::Procedure(parameters, body) => write!(f, ""),
             Value::Pair(car, cdr) => write!(f, "({} . {})", car, cdr),
             Value::Nothing => Ok(()),
             _ => write!(f, "Printing this type not implemented yet!\n"),
@@ -125,7 +122,41 @@ fn eval(s: &str, env: &mut Env) -> Value {
                 environment::add_binding(var_name.to_string(), eval(exp[2].as_str(), env), env);
                 return Value::Nothing;
             }
-            "let" => return Value::Text(String::from("let expression")),
+            "let" => {
+                if exp.len() != 3 {
+                    return Value::Error(String::from("Wrong number of arguments"));
+                }
+                let assignments = get_exp_inside_paren(&exp[1]).unwrap();
+                let parameters: Vec<String> = assignments
+                    .iter()
+                    .map(|x| get_exp_inside_paren(x).unwrap()[0].clone())
+                    .collect();
+                let values = assignments
+                    .iter()
+                    .map(|x| get_exp_inside_paren(x).unwrap()[1].clone())
+                    .collect::<Vec<String>>();
+
+                let mut new_expression = String::from("((lambda (");
+                for (i, par) in parameters.iter().enumerate() {
+                    new_expression.push_str(par);
+                    if i != parameters.len() - 1 {
+                        new_expression.push_str(" ");
+                    } else {
+                        new_expression.push_str(") ");
+                    }
+                }
+                new_expression.push_str(&exp[2]);
+                new_expression.push_str(") ");
+                for (i, val) in values.iter().enumerate() {
+                    new_expression.push_str(val);
+                    if i != values.len() - 1 {
+                        new_expression.push_str(" ");
+                    } else {
+                        new_expression.push_str(")");
+                    }
+                }
+                return eval(&new_expression, env);
+            }
             "if" => {
                 let n_of_args = exp.len();
                 if n_of_args < 3 || n_of_args > 4 {
@@ -144,7 +175,40 @@ fn eval(s: &str, env: &mut Env) -> Value {
                     _ => return Value::Error(String::from("Condition is not a bool!")),
                 }
             }
-            "cond" => return Value::Text(String::from("cond expression")),
+            "cond" => {
+                let n_of_args = exp.len();
+                if n_of_args < 2 {
+                    return Value::Nothing;
+                }
+                // get the first expression
+                let first = get_exp_inside_paren(&exp[1]).unwrap();
+                if first.len() != 2 {
+                    return Value::Error(String::from("Wrong cond expression!"));
+                }
+                // eval the first expression, if it's true, return the eval of the second
+                match eval(&first[0], env) {
+                    Value::Boolean(v) => {
+                        if v {
+                            // println!("condition is true");
+                            return eval(&first[1], env);
+                        } else {
+                            // println!("Condition is false");
+                            let mut new_exp = String::from("(cond ");
+                            // append the rest of the original expression
+                            for i in 2..exp.len() {
+                                new_exp.push_str(&exp[i]);
+                                if i != exp.len() - 1 {
+                                    new_exp.push_str(" ");
+                                }
+                            }
+                            new_exp.push_str(")");
+                            // println!("New expression: {}", new_exp);
+                            return eval(&new_exp, env);
+                        }
+                    }
+                    _ => return Value::Error(String::from("Condition is not a bool!")),
+                }
+            }
             "lambda" => {
                 let n_of_args = exp.len();
                 if n_of_args != 3 {
@@ -178,7 +242,7 @@ fn eval(s: &str, env: &mut Env) -> Value {
         None => return Value::Error(String::from("This variable does not exist!")),
     }
 
-    return Value::Text(String::from("Expression not yet implemented"));
+    // return Value::Text(String::from("Expression not yet implemented"));
 }
 
 fn get_exp_inside_paren(s: &str) -> Option<Vec<String>> {
@@ -290,6 +354,56 @@ fn apply(proc: Value, args: &Vec<Value>, env: &Env) -> Value {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for eq?")),
             },
+            ">" => match pp::greater_than(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for >")),
+            },
+            ">=" => match pp::greater_or_equal_than(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for >=")),
+            },
+            "<" => match pp::less_than(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for <")),
+            },
+            "<=" => match pp::less_or_equal_than(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for <=")),
+            },
+            "and" => {
+                for arg in args {
+                    if let Value::Boolean(b) = arg {
+                        if !b {
+                            return Value::Boolean(false);
+                        }
+                    } else {
+                        return Value::Error(String::from("Wrong arguments for and"));
+                    }
+                }
+                return Value::Boolean(true);
+            }
+            "or" => {
+                for arg in args {
+                    if let Value::Boolean(b) = arg {
+                        if *b {
+                            return Value::Boolean(true);
+                        }
+                    } else {
+                        return Value::Error(String::from("Wrong arguments for or"));
+                    }
+                }
+                return Value::Boolean(false);
+            }
+            "not" => {
+                if args.len() != 1 {
+                    return Value::Error(String::from("Wrong arguments for not"));
+                }
+                if let Value::Boolean(b) = &args[0] {
+                    return Value::Boolean(!b);
+                } else {
+                    return Value::Error(String::from("Wrong arguments for not"));
+                }
+            }
             "cons" => match pp::cons(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for cons")),

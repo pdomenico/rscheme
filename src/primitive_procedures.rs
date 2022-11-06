@@ -1,5 +1,4 @@
 use crate::Value;
-use std::collections::HashMap;
 
 pub fn sum(ns: &Vec<Value>) -> Option<Value> {
     let mut int_sum = 0;
@@ -17,7 +16,6 @@ pub fn sum(ns: &Vec<Value>) -> Option<Value> {
         return Some(Value::Integer(int_sum));
     }
     return Some(Value::Float(int_sum as f64 + f_sum));
-
 }
 
 pub fn subtract(ns: &Vec<Value>) -> Option<Value> {
@@ -76,11 +74,70 @@ pub fn equal(ns: &Vec<Value>) -> Option<Value> {
     }
 }
 
+pub fn greater_than(ns: &Vec<Value>) -> Option<Value> {
+    if ns.len() != 2 {
+        return None;
+    }
+
+    match (&ns[0], &ns[1]) {
+        (Value::Integer(a), Value::Integer(b)) => return Some(Value::Boolean(*a > *b)),
+        (Value::Integer(a), Value::Float(b)) => return Some(Value::Boolean(*a as f64 > *b)),
+        (Value::Float(a), Value::Integer(b)) => return Some(Value::Boolean(*a > *b as f64)),
+        (Value::Float(a), Value::Float(b)) => return Some(Value::Boolean(*a > *b)),
+        _ => return None,
+    }
+}
+
+pub fn less_than(ns: &Vec<Value>) -> Option<Value> {
+    if ns.len() != 2 {
+        return None;
+    }
+
+    match (&ns[0], &ns[1]) {
+        (Value::Integer(a), Value::Integer(b)) => return Some(Value::Boolean(*a < *b)),
+        (Value::Integer(a), Value::Float(b)) => return Some(Value::Boolean((*a as f64) < *b)),
+        (Value::Float(a), Value::Integer(b)) => return Some(Value::Boolean(*a < *b as f64)),
+        (Value::Float(a), Value::Float(b)) => return Some(Value::Boolean(*a < *b)),
+        _ => return None,
+    }
+}
+
+pub fn greater_or_equal_than(ns: &Vec<Value>) -> Option<Value> {
+    if ns.len() != 2 {
+        return None;
+    }
+
+    match (&ns[0], &ns[1]) {
+        (Value::Integer(a), Value::Integer(b)) => return Some(Value::Boolean(*a >= *b)),
+        (Value::Integer(a), Value::Float(b)) => return Some(Value::Boolean(*a as f64 >= *b)),
+        (Value::Float(a), Value::Integer(b)) => return Some(Value::Boolean(*a >= *b as f64)),
+        (Value::Float(a), Value::Float(b)) => return Some(Value::Boolean(*a >= *b)),
+        _ => return None,
+    }
+}
+
+pub fn less_or_equal_than(ns: &Vec<Value>) -> Option<Value> {
+    if ns.len() != 2 {
+        return None;
+    }
+
+    match (&ns[0], &ns[1]) {
+        (Value::Integer(a), Value::Integer(b)) => return Some(Value::Boolean(*a <= *b)),
+        (Value::Integer(a), Value::Float(b)) => return Some(Value::Boolean(*a as f64 <= *b)),
+        (Value::Float(a), Value::Integer(b)) => return Some(Value::Boolean(*a <= *b as f64)),
+        (Value::Float(a), Value::Float(b)) => return Some(Value::Boolean(*a <= *b)),
+        _ => return None,
+    }
+}
+
 pub fn cons(ns: &Vec<Value>) -> Option<Value> {
     if ns.len() != 2 {
         return None;
     }
-    return Some(Value::Pair(Box::new(ns[0].clone()), Box::new(ns[1].clone())));
+    return Some(Value::Pair(
+        Box::new(ns[0].clone()),
+        Box::new(ns[1].clone()),
+    ));
 }
 
 pub fn car(ns: &Vec<Value>) -> Option<Value> {

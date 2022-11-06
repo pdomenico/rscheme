@@ -1,4 +1,3 @@
-use crate::primitive_procedures;
 use crate::Value;
 use std::collections::HashMap;
 
@@ -7,7 +6,7 @@ pub type Env = Vec<HashMap<String, Value>>;
 pub fn default_env() -> Env {
     let mut outer_env = HashMap::new();
     for sym in [
-        "+", "-", "*", "/", "=", ">", "<", ">=", "<=", "cons", "car", "cdr",
+        "+", "-", "*", "/", "=", ">", "<", ">=", "<=", "and", "or", "not", "cons", "car", "cdr",
     ]
     .iter()
     {
@@ -31,7 +30,7 @@ pub fn extend_env(env: &Env) -> Env {
 }
 
 pub fn find_in_env<'a>(key: &'a str, env: &'a Env) -> Option<Value> {
-    for subenv in env {
+    for subenv in env.iter().rev() {
         match subenv.get(&key.to_string()) {
             Some(v) => return Some(v.clone()),
             _ => (),
