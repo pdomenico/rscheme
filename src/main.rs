@@ -12,7 +12,7 @@ use crate::environment::Env;
 #[derive(Clone)]
 pub enum Value {
     Text(String),
-    Integer(i32),
+    Integer(i64),
     Float(f64),
     Boolean(bool),
     Pair(Box<Value>, Box<Value>),
@@ -60,7 +60,7 @@ fn eval(s: &str, env: &mut Env) -> Value {
     // println!("Evaluating {}", s);
 
     // See if it's self evaluating
-    if let Ok(v) = s.parse::<i32>() {
+    if let Ok(v) = s.parse::<i64>() {
         return Value::Integer(v);
     }
 
@@ -369,6 +369,10 @@ fn apply(proc: Value, args: &Vec<Value>, env: &Env) -> Value {
             "<=" => match pp::less_or_equal_than(args) {
                 Some(v) => return v,
                 None => return Value::Error(String::from("Wrong arguments for <=")),
+            },
+            "%" | "mod" | "modulo" => match pp::modulo(args) {
+                Some(v) => return v,
+                None => return Value::Error(String::from("Wrong arguments for modulo")),
             },
             "and" => {
                 for arg in args {

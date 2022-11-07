@@ -130,6 +130,20 @@ pub fn less_or_equal_than(ns: &Vec<Value>) -> Option<Value> {
     }
 }
 
+pub fn modulo(ns: &Vec<Value>) -> Option<Value> {
+    if ns.len() != 2 {
+        return None;
+    }
+
+    match (&ns[0], &ns[1]) {
+        (Value::Integer(a), Value::Integer(b)) => return Some(Value::Integer(*a % *b)),
+        (Value::Integer(a), Value::Float(b)) => return Some(Value::Float(*a as f64 % *b)),
+        (Value::Float(a), Value::Integer(b)) => return Some(Value::Float(*a % *b as f64)),
+        (Value::Float(a), Value::Float(b)) => return Some(Value::Float(*a % *b)),
+        _ => return None,
+    }
+}
+
 pub fn cons(ns: &Vec<Value>) -> Option<Value> {
     if ns.len() != 2 {
         return None;
